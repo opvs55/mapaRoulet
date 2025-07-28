@@ -36,17 +36,15 @@ export interface Database {
           {
             foreignKeyName: "comments_post_id_fkey"
             columns: ["post_id"]
-            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "comments_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       post_likes: {
@@ -69,17 +67,15 @@ export interface Database {
           {
             foreignKeyName: "post_likes_post_id_fkey"
             columns: ["post_id"]
-            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "post_likes_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       posts: {
@@ -117,10 +113,9 @@ export interface Database {
           {
             foreignKeyName: "posts_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       profiles: {
@@ -142,14 +137,30 @@ export interface Database {
           updated_at?: string | null
           username?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_nearby_post_ids: {
+        Args: {
+          user_lat: number
+          user_lng: number
+          radius_km: number
+        }
+        Returns: {
+          id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Post, Coordinates, Comment, UserProfile } from './types/index.ts';
+import { Post, Coordinates, UserProfile } from './types/index.ts';
 import MapView from './components/map/MapView.tsx';
 import EventCreationModal from './components/event/EventCreationModal.tsx';
 import EventDetailsModal from './components/event/EventDetailsModal.tsx';
@@ -10,7 +11,7 @@ import useGeolocation from './hooks/useGeolocation.ts';
 import { PlusIcon, LayersIcon, ReelsIcon } from './components/ui/Icons.tsx';
 import { getCoordinatesForLocation } from './services/geminiService.ts';
 import { 
-    getPosts, 
+    getPostsNearLocation, 
     onAuthStateChange, 
     signOut, 
     deletePost as deletePostService,
@@ -26,7 +27,8 @@ import { Session } from '@supabase/supabase-js';
 import LoginPage from './components/auth/LoginPage.tsx';
 import ReelsView from './components/reels/ReelsView.tsx';
 import UserProfilePage from './components/user/UserProfilePage.tsx';
-import UserSetupModal from './components/user/UserSetupModal.tsx';
+import EditProfileModal from './components/user/EditProfileModal.tsx';
+import LocationBanner from './components/ui/LocationBanner.tsx';
 
 const mapStyles = {
   dark: {
@@ -54,57 +56,54 @@ const App: React.FC = () => {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showUserSetup, setShowUserSetup] = useState(false);
+  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const { location, error: geoError, requestLocation } = useGeolocation();
   const [currentMapStyleKey, setCurrentMapStyleKey] = useState('dark');
   const [isStyleSwitcherOpen, setStyleSwitcherOpen] = useState(false);
   const [isReelsOpen, setReelsOpen] = useState(false);
   const [isProfileOpen, setProfileOpen] = useState(false);
+  const [showLocationBanner, setShowLocationBanner] = useState(true);
 
   const defaultCenter: Coordinates = { lat: -23.55052, lng: -46.633308 }; // São Paulo
   const [mapCenter, setMapCenter] = useState<Coordinates>(defaultCenter);
   const [mapZoom, setMapZoom] = useState(13);
   const [activeCategories, setActiveCategories] = useState<string[]>([]);
   
-  const fetchAndSetPosts = async () => {
+  // The location to use for fetching posts. Defaults to SP if user location is not available.
+  const fetchLocation = useMemo(() => location || defaultCenter, [location, defaultCenter]);
+
+  const fetchAndSetPosts = useCallback(async (coords: Coordinates) => {
+      setIsLoading(true);
       try {
-        const fetchedPosts = await getPosts();
-        setPosts(fetchedPosts.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+        const fetchedPosts = await getPostsNearLocation(coords, 20); // 20km radius
+        setPosts(fetchedPosts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
       } catch (error) {
         console.error(error);
-        // Optionally, set an error state to show a message to the user
       } finally {
         setIsLoading(false);
       }
-  }
+  }, []);
   
-    const handleSetUsername = async (newUsername: string) => {
-      if (!session?.user) return;
-      try {
-        const updatedProfile = await updateUserProfileUsername(session.user.id, newUsername);
-        setUserProfile(updatedProfile);
-        setShowUserSetup(false);
-      } catch (error) {
-        console.error("Error updating username:", error);
-        // You could show an error message in the modal here
-      }
-    };
-
+  const handleProfileUpdate = async (newUsername: string) => {
+    if (!userProfile) return;
+    try {
+      const updatedProfile = await updateUserProfileUsername(userProfile.id, newUsername);
+      setUserProfile(updatedProfile);
+      setEditProfileModalOpen(false);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert((error as Error).message);
+    }
+  };
+  
   useEffect(() => {
+    // This effect handles authentication state changes
     const { data: authListener } = onAuthStateChange((_event, session) => {
       setSession(session);
       
       if (session) {
         const profile = session?.user?.user_metadata as UserProfile | null;
         setUserProfile(profile);
-        const username = profile?.username;
-        const isDefaultUsername = username === session.user.email?.split('@')[0];
-        
-        if (!username || isDefaultUsername) {
-            setShowUserSetup(true);
-        } else {
-            setShowUserSetup(false);
-        }
 
         // Update posts with correct like status when user changes
         setPosts(currentPosts => currentPosts.map(p => ({
@@ -113,7 +112,7 @@ const App: React.FC = () => {
         })));
 
         if (_event === 'SIGNED_IN') {
-          fetchAndSetPosts(); // refetch posts on sign in
+          fetchAndSetPosts(fetchLocation); // refetch posts on sign in with current location
           const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
           if (!hasSeenOnboarding) {
             setShowOnboarding(true);
@@ -121,13 +120,11 @@ const App: React.FC = () => {
         }
       } else {
          setUserProfile(null);
-         setShowUserSetup(false);
          setPosts([]); // Clear posts on sign out
       }
     });
     
-    setIsLoading(true);
-    fetchAndSetPosts();
+    // This effect requests location once on mount
     requestLocation();
 
     return () => {
@@ -137,6 +134,16 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // This effect fetches posts whenever the fetchLocation changes.
+    // This happens when the component mounts (using default) or when user location is found.
+    if(session) {
+      fetchAndSetPosts(fetchLocation);
+    }
+  }, [fetchLocation, session, fetchAndSetPosts]);
+
+
+  useEffect(() => {
+    // This effect centers the map on the user's location when it becomes available.
     if (location) {
         setMapCenter(location);
     }
@@ -150,7 +157,7 @@ const App: React.FC = () => {
   }, [posts, activeCategories]);
 
   const handlePostCreated = (newPost: Post) => {
-    setPosts(prevPosts => [newPost, ...prevPosts].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+    setPosts(prevPosts => [newPost, ...prevPosts].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
     setCreateModalOpen(false);
   };
 
@@ -285,23 +292,16 @@ const App: React.FC = () => {
     }
   }, [userProfile]);
   
-  if (isLoading && !session) {
-    return (
-        <div className="w-full h-full bg-gray-900 text-white flex flex-col items-center justify-center">
-            <Spinner size="lg" />
-            <p className="mt-4 text-lg">Carregando rolês...</p>
-        </div>
-    );
-  }
-
   if (!session) {
-    return <LoginPage />;
-  }
-
-  if (showUserSetup && userProfile) {
-    // Show an empty string if the username is the default one derived from email
-    const initialUsername = userProfile.username.includes('@') ? '' : userProfile.username;
-    return <UserSetupModal onSetUsername={handleSetUsername} initialUsername={initialUsername} />;
+      // Show login page only after initial check is done
+      if (isLoading) {
+         return (
+            <div className="w-full h-full bg-gray-900 text-white flex flex-col items-center justify-center">
+                <Spinner size="lg" />
+            </div>
+         );
+      }
+      return <LoginPage />;
   }
 
   if (showOnboarding) {
@@ -332,6 +332,12 @@ const App: React.FC = () => {
       </header>
       
       <main className="flex-grow relative z-0">
+        {isLoading && posts.length === 0 && (
+          <div className="absolute inset-0 bg-gray-900 bg-opacity-50 flex flex-col items-center justify-center z-10">
+            <Spinner size="lg" />
+            <p className="mt-4 text-lg">Buscando rolês perto de você...</p>
+          </div>
+        )}
         <MapView
           posts={filteredPosts}
           onMarkerClick={handleSelectPostFromAnywhere}
@@ -375,11 +381,16 @@ const App: React.FC = () => {
 
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="absolute bottom-8 right-8 bg-blue-500 hover:bg-blue-600 text-white rounded-full p-4 shadow-lg transition-transform transform hover:scale-110 z-[1000]"
+          className="absolute bottom-24 sm:bottom-8 right-8 bg-blue-500 hover:bg-blue-600 text-white rounded-full p-4 shadow-lg transition-transform transform hover:scale-110 z-[1000]"
           aria-label="Criar novo post"
         >
           <PlusIcon />
         </button>
+        
+        {!location && showLocationBanner && (
+           <LocationBanner onDismiss={() => setShowLocationBanner(false)} onActionClick={requestLocation}/>
+        )}
+
       </main>
 
       {selectedPost && (
@@ -435,6 +446,15 @@ const App: React.FC = () => {
           onLogout={signOut}
           onDeletePost={handleDeletePost}
           onDeleteAccount={handleDeleteAccount}
+          onEditProfile={() => setEditProfileModalOpen(true)}
+        />
+      )}
+      
+      {isEditProfileModalOpen && userProfile && (
+        <EditProfileModal
+            user={userProfile}
+            onClose={() => setEditProfileModalOpen(false)}
+            onSave={handleProfileUpdate}
         />
       )}
     </div>

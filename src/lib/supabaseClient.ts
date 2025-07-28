@@ -1,12 +1,12 @@
 
 
+
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/supabase.ts';
 
-// In a Vite app, environment variables are exposed via `import.meta.env`.
-// Variables must be prefixed with VITE_ to be exposed to the client.
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+// Accessing environment variables in a type-safe way using the vite-env.d.ts definition.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Verificação para garantir que as chaves não estão vazias.
 if (!supabaseUrl || !supabaseAnonKey) {

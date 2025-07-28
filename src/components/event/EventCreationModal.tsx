@@ -116,7 +116,6 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({ isOpen, onClose
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"

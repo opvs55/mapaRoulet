@@ -17,13 +17,33 @@ const base64ToFile = (base64: string, filename: string): File => {
     return new File([blob], filename, { type: 'image/jpeg' });
 };
 
-export const getPosts = async (): Promise<Post[]> => {
+export const getPostsNearLocation = async (coords: Coordinates, radiusInKm: number): Promise<Post[]> => {
     const { data: { session } } = await supabase.auth.getSession();
     const currentUserId = session?.user?.id;
 
-    // Calculate the timestamp for 24 hours ago
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // First, call the RPC function to get the IDs of nearby posts
+    const { data: postIdsData, error: rpcError } = await supabase.rpc(
+        'get_nearby_post_ids', {
+            user_lat: coords.lat,
+            user_lng: coords.lng,
+            radius_km: radiusInKm,
+        }
+    );
 
+    if (rpcError) {
+        console.error("Error fetching nearby post IDs:", rpcError);
+        // Don't throw, just return empty so the app doesn't crash.
+        // The error is logged for debugging.
+        return [];
+    }
+
+    if (!postIdsData || postIdsData.length === 0) {
+        return []; // No posts nearby, return empty array.
+    }
+
+    const postIds = postIdsData.map((item: {id: string}) => item.id);
+
+    // Now, fetch the full data for the posts that are nearby
     const { data: postsData, error: postsError } = await supabase
         .from('posts')
         .select(`
@@ -44,7 +64,7 @@ export const getPosts = async (): Promise<Post[]> => {
             ),
             post_likes(user_id)
         `)
-        .gte('created_at', twentyFourHoursAgo) // Filter for posts created in the last 24 hours
+        .in('id', postIds)
         .order('created_at', { ascending: false });
 
     if (postsError) {
@@ -127,7 +147,7 @@ export const createPost = async (postData: {
         
     const imageUrl = publicUrlData.publicUrl;
 
-    const postToInsert = {
+    const postToInsert: Database['public']['Tables']['posts']['Insert'] = {
         text: description,
         image_url: imageUrl,
         category: category,
@@ -176,7 +196,7 @@ export const deletePost = async (postId: string): Promise<void> => {
 // --- Like Functions ---
 
 export const likePost = async (postId: string, userId: string): Promise<void> => {
-    const likeToInsert = { post_id: postId, user_id: userId };
+    const likeToInsert: Database['public']['Tables']['post_likes']['Insert'] = { post_id: postId, user_id: userId };
     const { error } = await supabase.from('post_likes').insert([likeToInsert]);
     if (error) {
         console.error("Error liking post:", error);
@@ -195,7 +215,7 @@ export const unlikePost = async (postId: string, userId: string): Promise<void> 
 // --- Comment Functions ---
 
 export const addComment = async (postId: string, text: string, user: UserProfile): Promise<Comment> => {
-    const commentToInsert = { post_id: postId, text, user_id: user.id };
+    const commentToInsert: Database['public']['Tables']['comments']['Insert'] = { post_id: postId, text, user_id: user.id };
     const { data, error } = await supabase
         .from('comments')
         .insert([commentToInsert])
@@ -338,7 +358,7 @@ const upsertUserProfile = async (session: Session) => {
         console.error('Error fetching profile for upsert:', fetchError);
     }
 
-    const profileToUpsert = {
+    const profileToUpsert: Database['public']['Tables']['profiles']['Insert'] = {
         id: user.id,
         username: existingProfile?.username || user.user_metadata.full_name || user.user_metadata.name || user.email?.split('@')[0] || 'Anônimo',
         avatar_url: user.user_metadata.avatar_url || user.user_metadata.picture || `https://api.pravatar.cc/150?u=${user.id}`,
@@ -368,7 +388,7 @@ const upsertUserProfile = async (session: Session) => {
 };
 
 export const updateUserProfileUsername = async (userId: string, username: string): Promise<UserProfile> => {
-    const profileToUpdate = { 
+    const profileToUpdate: Database['public']['Tables']['profiles']['Update'] = { 
         username, 
         updated_at: new Date().toISOString() 
     };

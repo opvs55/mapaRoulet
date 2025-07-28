@@ -10,9 +10,10 @@ interface UserProfilePageProps {
   onLogout: () => void;
   onDeletePost: (postId: string) => void;
   onDeleteAccount: () => void;
+  onEditProfile: () => void;
 }
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ user, allPosts, onClose, onSelectPost, onLogout, onDeletePost, onDeleteAccount }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ user, allPosts, onClose, onSelectPost, onLogout, onDeletePost, onDeleteAccount, onEditProfile }) => {
 
   const userPosts = useMemo(() => {
     return allPosts.filter(post => post.author.id === user.id);
@@ -46,6 +47,12 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ user, allPosts, onClo
           <h2 className="text-2xl font-bold">{user.username}</h2>
           <p className="text-gray-400">{userPosts.length} Rolês Criados</p>
           <div className="flex items-center gap-4 mt-4">
+             <button 
+              onClick={onEditProfile}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-4 py-2 text-sm rounded-lg transition-colors"
+            >
+              Editar Perfil
+            </button>
             <button 
               onClick={onLogout}
               className="bg-gray-600 hover:bg-gray-500 text-white font-bold px-4 py-2 text-sm rounded-lg transition-colors"

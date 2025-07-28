@@ -1,12 +1,11 @@
 
 
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Coordinates } from '../types/index.ts';
 
-// In a Vite app, the correct way to access environment variables is `import.meta.env`.
-// The variable must be prefixed with `VITE_` to be exposed to the client.
-// While guidelines suggest `process.env.API_KEY`, that is not available in a standard browser environment.
-const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+// Accessing environment variables in a type-safe way using the vite-env.d.ts definition.
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 if (!apiKey) {
     // Updated error message to reflect the correct variable name.
