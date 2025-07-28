@@ -1,5 +1,6 @@
 
 
+
 import { Database } from '../types/supabase.ts';
 import { supabase } from '../lib/supabaseClient.ts';
 import { Post, Comment, Coordinates, UserProfile } from '../types/index.ts';
@@ -37,11 +38,11 @@ export const getPostsNearLocation = async (coords: Coordinates, radiusInKm: numb
         return [];
     }
 
-    if (!postIdsData || postIdsData.length === 0) {
+    if (!postIdsData || (postIdsData as any[]).length === 0) {
         return []; // No posts nearby, return empty array.
     }
 
-    const postIds = postIdsData.map((item: {id: string}) => item.id);
+    const postIds = (postIdsData as any[]).map((item: {id: string}) => item.id);
 
     // Now, fetch the full data for the posts that are nearby
     const { data: postsData, error: postsError } = await supabase
@@ -158,7 +159,7 @@ export const createPost = async (postData: {
 
     const { data: postInsertData, error: insertError } = await supabase
         .from('posts')
-        .insert([postToInsert])
+        .insert([postToInsert] as any)
         .select()
         .single();
 
@@ -169,14 +170,15 @@ export const createPost = async (postData: {
     
     // The user profile is passed in, so we can use it directly.
     const authorProfile: UserProfile = user;
+    const newPostData = postInsertData as any;
 
     return {
-        id: postInsertData.id,
-        text: postInsertData.text,
-        imageUrl: postInsertData.image_url,
-        category: postInsertData.category,
-        coordinates: { lat: postInsertData.lat, lng: postInsertData.lng },
-        timestamp: new Date(postInsertData.created_at),
+        id: newPostData.id,
+        text: newPostData.text,
+        imageUrl: newPostData.image_url,
+        category: newPostData.category,
+        coordinates: { lat: newPostData.lat, lng: newPostData.lng },
+        timestamp: new Date(newPostData.created_at),
         author: authorProfile,
         comments: [],
         likes: [],
@@ -197,7 +199,7 @@ export const deletePost = async (postId: string): Promise<void> => {
 
 export const likePost = async (postId: string, userId: string): Promise<void> => {
     const likeToInsert: Database['public']['Tables']['post_likes']['Insert'] = { post_id: postId, user_id: userId };
-    const { error } = await supabase.from('post_likes').insert([likeToInsert]);
+    const { error } = await supabase.from('post_likes').insert([likeToInsert] as any);
     if (error) {
         console.error("Error liking post:", error);
         throw new Error("Não foi possível curtir o post.");
@@ -218,7 +220,7 @@ export const addComment = async (postId: string, text: string, user: UserProfile
     const commentToInsert: Database['public']['Tables']['comments']['Insert'] = { post_id: postId, text, user_id: user.id };
     const { data, error } = await supabase
         .from('comments')
-        .insert([commentToInsert])
+        .insert([commentToInsert] as any)
         .select()
         .single();
 
@@ -227,11 +229,12 @@ export const addComment = async (postId: string, text: string, user: UserProfile
         throw new Error("Não foi possível adicionar o comentário.");
     }
     
+    const commentData = data as any;
     return {
-        id: data.id,
-        text: data.text,
-        timestamp: new Date(data.created_at),
-        post_id: data.post_id,
+        id: commentData.id,
+        text: commentData.text,
+        timestamp: new Date(commentData.created_at),
+        post_id: commentData.post_id,
         user_id: user.id,
         author: user,
     };
@@ -329,116 +332,4 @@ export const signOut = async () => {
     }
 };
 
-export const deleteCurrentUserAccount = async (userId: string): Promise<void> => {
-    // This will trigger the CASCADE deletes for all posts, comments, and likes by this user.
-    // IMPORTANT: This does NOT delete the user from the main authentication system (auth.users).
-    // A complete account deletion requires a server-side function (like a Supabase Edge Function)
-    // to remove the auth.user record. This implementation only removes their public data.
-    const { error } = await supabase.from('profiles').delete().eq('id', userId);
-    if (error) {
-        console.error("Error deleting user profile:", error);
-        throw new Error("Não foi possível deletar o perfil do usuário.");
-    }
-    // After deleting the profile, sign the user out to clear the session.
-    await signOut();
-};
-
-
-const upsertUserProfile = async (session: Session) => {
-    const { user } = session;
-    if (!user) return null;
-
-    const { data: existingProfile, error: fetchError } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', user.id)
-        .single();
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Error fetching profile for upsert:', fetchError);
-    }
-
-    const profileToUpsert: Database['public']['Tables']['profiles']['Insert'] = {
-        id: user.id,
-        username: existingProfile?.username || user.user_metadata.full_name || user.user_metadata.name || user.email?.split('@')[0] || 'Anônimo',
-        avatar_url: user.user_metadata.avatar_url || user.user_metadata.picture || `https://api.pravatar.cc/150?u=${user.id}`,
-        updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .upsert([profileToUpsert])
-      .select()
-      .single();
-
-    if (error || !data) {
-        console.error('Error upserting profile:', error);
-        throw new Error(`Error upserting profile: ${error?.message}`);
-    }
-    
-    await supabase.auth.updateUser({
-        data: {
-            id: data.id,
-            username: data.username,
-            avatar_url: data.avatar_url,
-        }
-    });
-
-    return data;
-};
-
-export const updateUserProfileUsername = async (userId: string, username: string): Promise<UserProfile> => {
-    const profileToUpdate: Database['public']['Tables']['profiles']['Update'] = { 
-        username, 
-        updated_at: new Date().toISOString() 
-    };
-
-    const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .update(profileToUpdate)
-        .eq('id', userId)
-        .select()
-        .single();
-
-    if (profileError || !profileData) {
-        console.error("Error updating profile in DB:", profileError);
-        throw new Error("Não foi possível atualizar o nome de usuário no perfil.");
-    }
-
-    const { data: { user }, error: userError } = await supabase.auth.updateUser({
-        data: { username }
-    });
-
-    if (userError || !user) {
-        console.error("Error updating auth user metadata:", userError);
-        throw new Error("Não foi possível atualizar os metadados do usuário.");
-    }
-
-    return {
-        id: user.id,
-        username: user.user_metadata.username as string,
-        avatar_url: user.user_metadata.avatar_url as string,
-    };
-};
-
-export const onAuthStateChange = (callback: (event: AuthChangeEvent, session: Session | null) => void) => {
-    return supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-            try {
-                await upsertUserProfile(session);
-                const { data: { session: updatedSession }, error } = await supabase.auth.refreshSession();
-                if (error) {
-                    console.error("Error refreshing session:", error);
-                    callback(event, session); 
-                } else {
-                    callback(event, updatedSession);
-                }
-            } catch (e) {
-                console.error("Error during SIGNED_IN handling:", e);
-                callback(event, session); 
-            }
-        } else {
-             callback(event, session);
-        }
-    });
-};
+export const deleteCurrentUserAccount

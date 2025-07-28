@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -8,109 +9,11 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
      crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-     crossorigin=""></script>
-    <style>
-      /* Assuming TailwindCSS is injected via a build step, otherwise this will need to be configured */
-      @import url('https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css');
-
-      html, body, #root {
-        height: 100%;
-        overflow: hidden;
-      }
-      /* Custom styles for leaflet popups and controls to match the dark theme */
-      .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-        background-color: #2d3748; /* gray-800 */
-        color: #f7fafc; /* gray-100 */
-        border-radius: 0.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      }
-      .leaflet-popup-close-button {
-        color: #f7fafc !important;
-      }
-      .leaflet-control-zoom-in, .leaflet-control-zoom-out {
-        background-color: #2d3748 !important;
-        color: #f7fafc !important;
-        border: 1px solid #4a5568 !important;
-      }
-      .leaflet-container {
-        background-color: #1a202c; /* gray-900 */
-      }
-      .event-marker-icon {
-        --shadow-color1: #fb923c; /* default fallback color */
-        --shadow-color2: #f59e0b; /* default fallback color */
-        animation: flicker 2s infinite alternate;
-      }
-      @keyframes flicker {
-        0%, 18%, 22%, 25%, 53%, 57%, 100% {
-          filter: drop-shadow(0 0 4px var(--shadow-color1)) drop-shadow(0 0 10px var(--shadow-color2));
-          opacity: 1;
-        }
-        20%, 24%, 55% {
-          filter: none;
-          opacity: 0.9;
-        }
-      }
-      .animate-fade-in-up {
-        animation: fadeInUp 0.5s ease-out forwards;
-      }
-      @keyframes fadeInUp {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      /* Custom scrollbar for comments */
-      .comment-scrollbar::-webkit-scrollbar {
-        width: 8px;
-      }
-      .comment-scrollbar::-webkit-scrollbar-track {
-        background: #2d3748; /* gray-800 */
-      }
-      .comment-scrollbar::-webkit-scrollbar-thumb {
-        background-color: #4a5568; /* gray-600 */
-        border-radius: 4px;
-        border: 2px solid #2d3748; /* gray-800 */
-      }
-      /* Reels styles */
-      .reels-container {
-        scroll-snap-type: y mandatory;
-        overflow-y: scroll;
-        height: 100%;
-        width: 100%;
-      }
-      .reel-item {
-        scroll-snap-align: start;
-        height: 100%;
-        width: 100%;
-        position: relative;
-        flex-shrink: 0;
-      }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.11.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.1.0/client",
-    "react": "https://esm.sh/react@^19.1.0",
-    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
-    "leaflet": "https://esm.sh/leaflet@^1.9.4",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.45.0",
-    "react/": "https://esm.sh/react@^19.1.0/",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.0/"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+  <link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-900">
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
