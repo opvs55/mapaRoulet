@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { GoogleIcon, FacebookIcon, MapIcon } from '../ui/Icons.tsx';
+import { GoogleIcon, FacebookIcon, LogoIcon } from '../ui/Icons.tsx';
 import Spinner from '../ui/Spinner.tsx';
 import { 
     signInWithGoogle, 
     signInWithFacebook,
     signInWithEmail,
     signUpWithEmail,
-} from '../../services/supabaseService.ts';
+} from '../../services/auth.ts';
 
 const LoginPage: React.FC = () => {
     const [isLoginView, setIsLoginView] = useState(true);
@@ -25,10 +25,12 @@ const LoginPage: React.FC = () => {
         try {
             if (isLoginView) {
                 await signInWithEmail({ email, password });
-                // onAuthStateChange in App.tsx will handle the redirect
+                // onAuthStateChange in useAuth.ts will handle the login state
             } else {
                 const result = await signUpWithEmail({ email, password });
                 setMessage(result.message);
+                setEmail('');
+                setPassword('');
             }
         } catch (err) {
             setError((err as Error).message);
@@ -41,8 +43,8 @@ const LoginPage: React.FC = () => {
         <div className="w-full h-full bg-gray-900 text-white flex flex-col items-center justify-center p-4">
             <div className="w-full max-w-sm mx-auto animate-fade-in-up">
                 <div className="text-center mb-8">
-                    <MapIcon className="w-20 h-20 text-blue-400 mx-auto" />
-                    <h1 className="text-4xl font-bold mt-2">Mapa de Rolês</h1>
+                    <LogoIcon className="w-20 h-20 text-blue-400 mx-auto" />
+                    <h1 className="text-4xl font-bold mt-2">Radar Urbano</h1>
                     <p className="text-gray-400 mt-1">
                         {isLoginView ? 'Entre para continuar' : 'Crie sua conta para começar'}
                     </p>

@@ -1,5 +1,5 @@
 {
-  "name": "Mapa de Rolês",
+  "name": "Radar Urbano",
   "description": "Um aplicativo de mapa social para descobrir e compartilhar eventos e momentos que estão acontecendo em tempo real na sua cidade. Veja o que está rolando no mapa e adicione seus próprios 'rolês'.",
   "requestFramePermissions": [
     "camera",

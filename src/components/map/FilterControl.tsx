@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { FlameIcon, PartyPopperIcon, FoodIcon, MusicIcon, ArtIcon, FilterIcon } from '../ui/Icons.tsx';
 
@@ -45,7 +44,7 @@ const FilterControl: React.FC<FilterControlProps> = ({ activeCategories, setActi
     }
 
     return (
-        <div className="absolute top-20 right-4 z-[1000] sm:top-4 sm:right-20">
+        <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="bg-gray-800 bg-opacity-75 text-white rounded-full p-3 shadow-lg transition-transform transform hover:scale-110"

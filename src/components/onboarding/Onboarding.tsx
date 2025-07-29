@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapIcon, CameraIcon, PartyPopperIcon } from '../ui/Icons.tsx';
+import { LogoIcon, CameraIcon, PartyPopperIcon } from '../ui/Icons.tsx';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -10,8 +10,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
   const steps = [
     {
-      icon: <MapIcon className="w-24 h-24 text-blue-400" />,
-      title: 'Bem-vindo ao Mapa de Rolês!',
+      icon: <LogoIcon className="w-24 h-24 text-blue-400" />,
+      title: 'Bem-vindo ao Radar Urbano!',
       description: 'Descubra e compartilhe os melhores eventos e momentos que estão rolando na sua cidade, em tempo real.',
       buttonText: 'Começar',
     },

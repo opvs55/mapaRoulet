@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Post, Comment, UserProfile } from '../../types/index.ts';
 import { CloseIcon, HeartIcon, CommentIcon, ShareIcon, SendIcon, TrashIcon } from '../ui/Icons.tsx';
@@ -137,4 +139,4 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ post, onClose, on
   );
 };
 
-export default EventDetailsModal;
+export default React.memo(EventDetailsModal);

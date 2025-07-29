@@ -26,7 +26,6 @@ export interface Database {
           post_id: string
         }
         Update: {
-          id?: string
           created_at?: string
           text?: string
           user_id?: string
@@ -36,12 +35,14 @@ export interface Database {
           {
             foreignKeyName: "comments_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "comments_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
@@ -60,19 +61,19 @@ export interface Database {
         }
         Update: {
           created_at?: string
-          post_id?: string
-          user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "post_likes_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "post_likes_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
@@ -102,7 +103,6 @@ export interface Database {
         Update: {
           category?: string
           created_at?: string
-          id?: string
           image_url?: string
           lat?: number
           lng?: number
@@ -113,6 +113,7 @@ export interface Database {
           {
             foreignKeyName: "posts_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
@@ -133,24 +134,20 @@ export interface Database {
         }
         Update: {
           avatar_url?: string | null
-          id?: string
           updated_at?: string | null
           username?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_id_fkey"
-            columns: ["id"]
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      delete_user_account: {
+        Args: Record<string, unknown>
+        Returns: undefined
+      }
       get_nearby_post_ids: {
         Args: {
           user_lat: number

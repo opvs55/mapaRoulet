@@ -1,14 +1,22 @@
 export const timeSince = (date: Date): string => {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  let interval = seconds / 31536000;
-  if (interval > 1) return `${Math.floor(interval)}a`;
-  interval = seconds / 2592000;
-  if (interval > 1) return `${Math.floor(interval)}m`;
-  interval = seconds / 86400;
-  if (interval > 1) return `${Math.floor(interval)}d`;
-  interval = seconds / 3600;
-  if (interval > 1) return `${Math.floor(interval)}h`;
-  interval = seconds / 60;
-  if (interval > 1) return `${Math.floor(interval)}min`;
-  return `${Math.floor(seconds)}s`;
+  const now = new Date();
+  
+  const isToday = now.getFullYear() === date.getFullYear() &&
+                now.getMonth() === date.getMonth() &&
+                now.getDate() === date.getDate();
+
+  if (isToday) {
+    // Formato "HH:mm", ex: "14:30"
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  const isThisYear = now.getFullYear() === date.getFullYear();
+
+  if (isThisYear) {
+      // Formato "DD/MM", ex: "25/05"
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  }
+
+  // Formato "DD/MM/AA", ex: "25/05/23"
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };

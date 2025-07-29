@@ -1,18 +1,17 @@
 
 
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Coordinates } from '../types/index.ts';
 
-// Accessing environment variables in a type-safe way using the vite-env.d.ts definition.
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!apiKey) {
-    // Updated error message to reflect the correct variable name.
-    throw new Error("A chave da API do Gemini (VITE_GEMINI_API_KEY) não foi encontrada. Verifique suas variáveis de ambiente.");
+// In a Vite app, the correct way to access environment variables is `import.meta.env`.
+// The variable must be prefixed with `VITE_` to be exposed to the client.
+// However, per strict project guidelines, we must use process.env.API_KEY.
+// The build environment should handle this substitution.
+if (!process.env.API_KEY) {
+    throw new Error("A chave da API do Gemini (API_KEY) não foi encontrada. Verifique suas variáveis de ambiente.");
 }
 
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Generates a creative description for an image using Gemini.
@@ -36,6 +35,10 @@ export const generateDescriptionFromImage = async (base64Image: string): Promise
       model: 'gemini-2.5-flash',
       contents: { parts: [imagePart, textPart] },
     });
+    
+    if (!response.text) {
+        throw new Error("A API não retornou uma descrição.");
+    }
 
     return response.text.trim();
   } catch (error) {
@@ -64,7 +67,11 @@ export const getCoordinatesForLocation = async (locationName: string): Promise<C
             },
         });
 
-        // The response text needs to be cleaned and parsed
+        if (!response.text) {
+             throw new Error("A API não retornou as coordenadas.");
+        }
+
+        // A resposta de texto precisa ser limpa e analisada
         let textResponse = response.text.trim();
         const jsonMatch = textResponse.match(/{[^]*}/);
         if (jsonMatch) {

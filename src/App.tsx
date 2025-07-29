@@ -1,6 +1,5 @@
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Post, Coordinates, UserProfile } from './types/index.ts';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Post, Coordinates } from './types/index.ts';
 import MapView from './components/map/MapView.tsx';
 import EventCreationModal from './components/event/EventCreationModal.tsx';
 import EventDetailsModal from './components/event/EventDetailsModal.tsx';
@@ -8,22 +7,12 @@ import Onboarding from './components/onboarding/Onboarding.tsx';
 import LocationSearch from './components/map/LocationSearch.tsx';
 import FilterControl from './components/map/FilterControl.tsx';
 import useGeolocation from './hooks/useGeolocation.ts';
-import { PlusIcon, LayersIcon, ReelsIcon } from './components/ui/Icons.tsx';
+import { PlusIcon, LayersIcon, ReelsIcon, CloseIcon, RefreshIcon, LogoIcon } from './components/ui/Icons.tsx';
 import { getCoordinatesForLocation } from './services/geminiService.ts';
-import { 
-    getPostsNearLocation, 
-    onAuthStateChange, 
-    signOut, 
-    deletePost as deletePostService,
-    addComment as addCommentService,
-    deleteComment as deleteCommentService,
-    likePost as likePostService,
-    unlikePost as unlikePostService,
-    updateUserProfileUsername,
-    deleteCurrentUserAccount
-} from './services/supabaseService.ts';
+import { updateUserProfile } from './services/profile.ts';
+import { useAuth } from './hooks/useAuth.ts';
+import { usePosts } from './hooks/usePosts.ts';
 import Spinner from './components/ui/Spinner.tsx';
-import { Session } from '@supabase/supabase-js';
 import LoginPage from './components/auth/LoginPage.tsx';
 import ReelsView from './components/reels/ReelsView.tsx';
 import UserProfilePage from './components/user/UserProfilePage.tsx';
@@ -49,11 +38,23 @@ const mapStyles = {
 };
 
 const App: React.FC = () => {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [session, setSession] = useState<Session | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const { session, userProfile, setUserProfile, isLoading: isAuthLoading, signOut, deleteAccount } = useAuth();
+  const { 
+    posts, 
+    setPosts, 
+    selectedPost, 
+    setSelectedPost, 
+    isRefreshing, 
+    fetchError, 
+    setFetchError,
+    fetchAndSetPosts,
+    handlePostCreated,
+    handleDeletePost,
+    handleLikePost,
+    handleAddComment,
+    handleDeleteComment 
+  } = usePosts();
+
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
@@ -63,91 +64,63 @@ const App: React.FC = () => {
   const [isReelsOpen, setReelsOpen] = useState(false);
   const [isProfileOpen, setProfileOpen] = useState(false);
   const [showLocationBanner, setShowLocationBanner] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const defaultCenter: Coordinates = { lat: -23.55052, lng: -46.633308 }; // São Paulo
   const [mapCenter, setMapCenter] = useState<Coordinates>(defaultCenter);
   const [mapZoom, setMapZoom] = useState(13);
   const [activeCategories, setActiveCategories] = useState<string[]>([]);
   
-  // The location to use for fetching posts. Defaults to SP if user location is not available.
-  const fetchLocation = useMemo(() => location || defaultCenter, [location, defaultCenter]);
+  const mapMoveDebounceTimeout = useRef<number | null>(null);
 
-  const fetchAndSetPosts = useCallback(async (coords: Coordinates) => {
-      setIsLoading(true);
-      try {
-        const fetchedPosts = await getPostsNearLocation(coords, 20); // 20km radius
-        setPosts(fetchedPosts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-  }, []);
-  
-  const handleProfileUpdate = async (newUsername: string) => {
+  const handleProfileUpdate = async (newUsername: string, avatarFile: File | null) => {
     if (!userProfile) return;
     try {
-      const updatedProfile = await updateUserProfileUsername(userProfile.id, newUsername);
+      const updatedProfile = await updateUserProfile(userProfile.id, newUsername, avatarFile);
       setUserProfile(updatedProfile);
+      // Update posts authored by the user to reflect new profile data
+      setPosts(currentPosts => currentPosts.map(p => {
+        if (p.author.id === updatedProfile.id) {
+          return { ...p, author: updatedProfile };
+        }
+        return p;
+      }));
       setEditProfileModalOpen(false);
     } catch (error) {
       console.error("Error updating profile:", error);
-      alert((error as Error).message);
+      // Re-throw so the modal's catch block can handle the UI update
+      throw error;
     }
   };
   
+  // Handles auth side-effects like showing onboarding
   useEffect(() => {
-    // This effect handles authentication state changes
-    const { data: authListener } = onAuthStateChange((_event, session) => {
-      setSession(session);
-      
-      if (session) {
-        const profile = session?.user?.user_metadata as UserProfile | null;
-        setUserProfile(profile);
-
-        // Update posts with correct like status when user changes
-        setPosts(currentPosts => currentPosts.map(p => ({
-            ...p,
-            isLiked: profile ? p.likes.includes(profile.id) : false,
-        })));
-
-        if (_event === 'SIGNED_IN') {
-          fetchAndSetPosts(fetchLocation); // refetch posts on sign in with current location
-          const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-          if (!hasSeenOnboarding) {
-            setShowOnboarding(true);
-          }
-        }
-      } else {
-         setUserProfile(null);
-         setPosts([]); // Clear posts on sign out
+    if (session && !isAuthLoading) {
+      const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+      if (!hasSeenOnboarding) {
+        setShowOnboarding(true);
       }
-    });
-    
-    // This effect requests location once on mount
+    }
+  }, [session, isAuthLoading]);
+
+  // Request location once on mount
+  useEffect(() => {
     requestLocation();
+  }, [requestLocation]);
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Handles the one-time initial fetch after geolocation is resolved
   useEffect(() => {
-    // This effect fetches posts whenever the fetchLocation changes.
-    // This happens when the component mounts (using default) or when user location is found.
-    if(session) {
-      fetchAndSetPosts(fetchLocation);
-    }
-  }, [fetchLocation, session, fetchAndSetPosts]);
+    if (!session || !isInitialLoad) return;
+    
+    const isGeoSettled = location || geoError;
 
-
-  useEffect(() => {
-    // This effect centers the map on the user's location when it becomes available.
-    if (location) {
-        setMapCenter(location);
+    if (isGeoSettled) {
+        const initialCenter = location || defaultCenter;
+        setMapCenter(initialCenter);
+        fetchAndSetPosts(initialCenter, true);
+        setIsInitialLoad(false); // Mark initial load as complete
     }
-  }, [location]);
+  }, [location, geoError, session, isInitialLoad, fetchAndSetPosts, defaultCenter]);
 
   const filteredPosts = useMemo(() => {
     if (activeCategories.length === 0) {
@@ -155,112 +128,6 @@ const App: React.FC = () => {
     }
     return posts.filter(post => activeCategories.includes(post.category));
   }, [posts, activeCategories]);
-
-  const handlePostCreated = (newPost: Post) => {
-    setPosts(prevPosts => [newPost, ...prevPosts].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-    setCreateModalOpen(false);
-  };
-
-  const handleAddComment = useCallback(async (postId: string, commentText: string) => {
-    if (!userProfile) return;
-    try {
-        const newComment = await addCommentService(postId, commentText, userProfile);
-
-        const updatePostState = (prev: Post | null) => prev ? {
-            ...prev,
-            comments: [...prev.comments, newComment],
-            comments_count: prev.comments_count + 1
-        } : null;
-        
-        setSelectedPost(updatePostState);
-        setPosts(prevPosts => prevPosts.map(p => p.id === postId ? updatePostState(p) as Post : p));
-
-    } catch(error) {
-        console.error("Failed to add comment:", error);
-    }
-  }, [userProfile]);
-
-
-  const handleLikePost = useCallback(async (postId: string) => {
-     if (!userProfile) return;
-     
-     const post = posts.find(p => p.id === postId);
-     if (!post) return;
-
-     const currentlyLiked = post.isLiked;
-     const newLikedState = !currentlyLiked;
-
-     // Optimistic update
-     const updatePostState = (p: Post) => ({
-        ...p,
-        isLiked: newLikedState,
-        likes: newLikedState ? [...p.likes, userProfile.id] : p.likes.filter(id => id !== userProfile.id),
-     });
-     setPosts(currentPosts => currentPosts.map(p => p.id === postId ? updatePostState(p) : p));
-     if(selectedPost?.id === postId) {
-         setSelectedPost(p => p ? updatePostState(p) : null);
-     }
-     
-     try {
-        if (newLikedState) {
-            await likePostService(postId, userProfile.id);
-        } else {
-            await unlikePostService(postId, userProfile.id);
-        }
-     } catch (error) {
-        // Revert on error
-         console.error("Failed to update like:", error);
-         const revertPostState = (p: Post) => ({
-            ...p,
-            isLiked: currentlyLiked,
-            likes: post.likes,
-         });
-         setPosts(currentPosts => currentPosts.map(p => p.id === postId ? revertPostState(p) : p));
-         if(selectedPost?.id === postId) {
-            setSelectedPost(p => p ? revertPostState(p) : null);
-         }
-     }
-  }, [userProfile, posts, selectedPost]);
-
-  const handleDeletePost = useCallback(async (postId: string) => {
-    const originalPosts = posts;
-    setPosts(prev => prev.filter(p => p.id !== postId));
-    setSelectedPost(null);
-    setProfileOpen(false);
-
-    try {
-        await deletePostService(postId);
-    } catch(error) {
-        console.error("Failed to delete post:", error);
-        setPosts(originalPosts); // Revert on error
-    }
-  }, [posts]);
-
-  const handleDeleteComment = useCallback(async (commentId: string, postId: string) => {
-    const updatePostState = (p: Post) => ({
-        ...p,
-        comments: p.comments.filter(c => c.id !== commentId),
-        comments_count: p.comments_count - 1
-    });
-
-    // Optimistic update
-    const originalPosts = posts;
-    setPosts(prev => prev.map(p => p.id === postId ? updatePostState(p) : p));
-    if(selectedPost?.id === postId) {
-        setSelectedPost(p => p ? updatePostState(p) : null);
-    }
-
-    try {
-        await deleteCommentService(commentId);
-    } catch (error) {
-        console.error("Failed to delete comment:", error);
-        setPosts(originalPosts); // Revert
-        if(selectedPost?.id === postId) {
-            const originalPost = originalPosts.find(p => p.id === postId);
-            setSelectedPost(originalPost || null);
-        }
-    }
-  }, [posts, selectedPost]);
 
   const handleLocationSearch = async (locationName: string) => {
     try {
@@ -273,34 +140,66 @@ const App: React.FC = () => {
     }
   }
 
-  const handleSelectPostFromAnywhere = (post: Post) => {
+  const handleMapMoveEnd = useCallback((newCenter: Coordinates, newZoom: number) => {
+    setMapCenter(newCenter);
+    setMapZoom(newZoom);
+
+    if (mapMoveDebounceTimeout.current) {
+        clearTimeout(mapMoveDebounceTimeout.current);
+    }
+    
+    mapMoveDebounceTimeout.current = window.setTimeout(() => {
+        fetchAndSetPosts(newCenter, false);
+    }, 1500); // 1.5 second debounce after map stops moving
+
+  }, [fetchAndSetPosts]);
+
+  const handleSelectPostFromAnywhere = useCallback((post: Post) => {
     setProfileOpen(false);
     setReelsOpen(false);
     setMapCenter(post.coordinates);
     setMapZoom(15);
     setSelectedPost(post);
-  }
+  }, [setSelectedPost]);
 
   const handleDeleteAccount = useCallback(async () => {
     if (!userProfile) return;
     try {
-      await deleteCurrentUserAccount(userProfile.id);
-      // onAuthStateChange will handle setting session to null
+      await deleteAccount();
     } catch (error) {
       console.error("Failed to delete account:", error);
       alert((error as Error).message);
     }
-  }, [userProfile]);
+  }, [userProfile, deleteAccount]);
   
+  const handleManualRefresh = () => {
+    if (mapMoveDebounceTimeout.current) {
+      clearTimeout(mapMoveDebounceTimeout.current);
+    }
+    fetchAndSetPosts(mapCenter, false);
+  };
+
+  const handleCloseDetails = useCallback(() => {
+    setSelectedPost(null);
+  }, [setSelectedPost]);
+
+  const displayedPost = useMemo(() => {
+      if (!selectedPost) return null;
+      // Find the most up-to-date version of the post from the list
+      // to ensure the modal has the freshest data.
+      return posts.find(p => p.id === selectedPost.id) || selectedPost;
+  }, [posts, selectedPost]);
+  
+  if (isAuthLoading) {
+      return (
+          <div className="w-full h-full bg-gray-900 text-white flex flex-col items-center justify-center">
+              <Spinner size="lg" />
+              <p className="mt-4 text-lg">Carregando...</p>
+          </div>
+      );
+  }
+
   if (!session) {
-      // Show login page only after initial check is done
-      if (isLoading) {
-         return (
-            <div className="w-full h-full bg-gray-900 text-white flex flex-col items-center justify-center">
-                <Spinner size="lg" />
-            </div>
-         );
-      }
       return <LoginPage />;
   }
 
@@ -314,7 +213,10 @@ const App: React.FC = () => {
   return (
     <div className="w-screen h-screen bg-gray-900 text-white flex flex-col">
       <header className="shrink-0 bg-black bg-opacity-75 p-3 sm:p-4 flex items-center justify-between z-20 shadow-lg gap-2 sm:gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-wider text-left shrink-0 hidden sm:block">Mapa de Rolês</h1>
+        <div className="flex items-center gap-2 shrink-0">
+          <LogoIcon className="w-8 h-8 text-blue-400" />
+          <h1 className="hidden sm:block text-xl font-bold tracking-wider text-left">Radar Urbano</h1>
+        </div>
         <div className="flex-grow flex justify-center px-1 sm:px-2">
             <LocationSearch onSearch={handleLocationSearch} />
         </div>
@@ -324,7 +226,7 @@ const App: React.FC = () => {
           </button>
             {userProfile && (
               <button onClick={() => setProfileOpen(true)} className="flex items-center gap-2 shrink-0 p-1 rounded-full hover:bg-gray-700 transition-colors">
-                  <img src={userProfile.avatar_url} alt="User Avatar" className="w-8 h-8 rounded-full"/>
+                  <img src={userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.username)}&background=random`} alt="User Avatar" className="w-8 h-8 rounded-full"/>
                   <span className="hidden md:inline text-gray-300 text-sm font-semibold pr-2">{userProfile.username.split(' ')[0]}</span>
               </button>
             )}
@@ -332,10 +234,21 @@ const App: React.FC = () => {
       </header>
       
       <main className="flex-grow relative z-0">
-        {isLoading && posts.length === 0 && (
+        {isInitialLoad && posts.length === 0 && (
           <div className="absolute inset-0 bg-gray-900 bg-opacity-50 flex flex-col items-center justify-center z-10">
             <Spinner size="lg" />
             <p className="mt-4 text-lg">Buscando rolês perto de você...</p>
+          </div>
+        )}
+         {fetchError && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-800 border border-red-600 text-white p-3 rounded-lg shadow-lg z-[1001] flex items-center gap-4 animate-fade-in-up w-11/12 max-w-md">
+            <div className="flex-grow">
+                <p className="font-bold">Erro ao buscar rolês</p>
+                <p className="text-sm text-red-200">{fetchError}</p>
+            </div>
+            <button onClick={() => setFetchError(null)} className="p-1 rounded-full hover:bg-red-700">
+                <CloseIcon />
+            </button>
           </div>
         )}
         <MapView
@@ -345,38 +258,48 @@ const App: React.FC = () => {
           zoom={mapZoom}
           userLocation={location}
           mapStyle={mapStyles[currentMapStyleKey]}
+          onMoveEnd={handleMapMoveEnd}
         />
         
-        <FilterControl activeCategories={activeCategories} setActiveCategories={setActiveCategories} />
-
-        <div className="absolute top-4 right-4 z-[1000]">
-          <button
-            onClick={() => setStyleSwitcherOpen(!isStyleSwitcherOpen)}
-            className="bg-gray-800 bg-opacity-75 text-white rounded-full p-3 shadow-lg transition-transform transform hover:scale-110"
-            aria-label="Mudar estilo do mapa"
-          >
-            <LayersIcon />
-          </button>
-          {isStyleSwitcherOpen && (
-            <div className="absolute top-14 right-0 bg-gray-800 bg-opacity-90 rounded-lg shadow-xl p-2 animate-fade-in-up w-36">
-              {Object.entries(mapStyles).map(([key, style]) => (
+        <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+            <FilterControl activeCategories={activeCategories} setActiveCategories={setActiveCategories} />
+            <div className="relative">
                 <button
-                  key={key}
-                  onClick={() => {
-                    setCurrentMapStyleKey(key);
-                    setStyleSwitcherOpen(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-md mb-1 last:mb-0 text-sm font-semibold transition-colors ${
-                    currentMapStyleKey === key
-                      ? 'bg-blue-500 text-white'
-                      : 'hover:bg-gray-700 text-gray-200'
-                  }`}
+                    onClick={() => setStyleSwitcherOpen(!isStyleSwitcherOpen)}
+                    className="bg-gray-800 bg-opacity-75 text-white rounded-full p-3 shadow-lg transition-transform transform hover:scale-110"
+                    aria-label="Mudar estilo do mapa"
                 >
-                  {style.name}
+                    <LayersIcon />
                 </button>
-              ))}
+                {isStyleSwitcherOpen && (
+                    <div className="absolute top-14 right-0 bg-gray-800 bg-opacity-90 rounded-lg shadow-xl p-2 animate-fade-in-up w-36">
+                    {Object.entries(mapStyles).map(([key, style]) => (
+                        <button
+                        key={key}
+                        onClick={() => {
+                            setCurrentMapStyleKey(key);
+                            setStyleSwitcherOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-md mb-1 last:mb-0 text-sm font-semibold transition-colors ${
+                            currentMapStyleKey === key
+                            ? 'bg-blue-500 text-white'
+                            : 'hover:bg-gray-700 text-gray-200'
+                        }`}
+                        >
+                        {style.name}
+                        </button>
+                    ))}
+                    </div>
+                )}
             </div>
-          )}
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="bg-gray-800 bg-opacity-75 text-white rounded-full p-3 shadow-lg transition-transform transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Atualizar rolês na área"
+            >
+              {isRefreshing ? <Spinner size="sm" /> : <RefreshIcon className="w-5 h-5"/>}
+            </button>
         </div>
 
         <button
@@ -393,10 +316,10 @@ const App: React.FC = () => {
 
       </main>
 
-      {selectedPost && (
+      {displayedPost && userProfile && (
         <EventDetailsModal 
-          post={selectedPost} 
-          onClose={() => setSelectedPost(null)}
+          post={displayedPost} 
+          onClose={handleCloseDetails}
           onAddComment={handleAddComment}
           onLike={handleLikePost}
           onDeleteComment={handleDeleteComment}
@@ -408,7 +331,11 @@ const App: React.FC = () => {
         <EventCreationModal
           isOpen={isCreateModalOpen}
           onClose={() => setCreateModalOpen(false)}
-          onPostCreated={handlePostCreated}
+          onPostCreated={(newPost) => {
+            handlePostCreated(newPost);
+            setCreateModalOpen(false);
+            handleSelectPostFromAnywhere(newPost);
+          }}
           userLocation={location}
           user={userProfile}
         />
@@ -444,7 +371,10 @@ const App: React.FC = () => {
           onClose={() => setProfileOpen(false)}
           onSelectPost={handleSelectPostFromAnywhere}
           onLogout={signOut}
-          onDeletePost={handleDeletePost}
+          onDeletePost={(postId) => {
+            handleDeletePost(postId);
+            setProfileOpen(false);
+          }}
           onDeleteAccount={handleDeleteAccount}
           onEditProfile={() => setEditProfileModalOpen(true)}
         />

@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Post, UserProfile } from '../../types/index.ts';
 import { CloseIcon, TrashIcon } from '../ui/Icons.tsx';
@@ -20,16 +21,15 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ user, allPosts, onClo
   }, [allPosts, user.id]);
   
   const handleDeleteClick = (e: React.MouseEvent, postId: string) => {
-    e.stopPropagation(); // Prevent the post from opening when clicking delete
-    if(window.confirm("Tem certeza que quer apagar este rolê? Esta ação não pode ser desfeita.")){
-        onDeletePost(postId);
-    }
+    e.stopPropagation(); // Previne que o post seja aberto ao clicar em deletar
+    // A confirmação foi removida pois `window.confirm` é bloqueado no sandbox.
+    // Em um ambiente de produção, um modal de confirmação customizado seria ideal.
+    onDeletePost(postId);
   }
   
   const handleAccountDelete = () => {
-    if(window.confirm("ATENÇÃO: Você tem certeza que quer deletar sua conta? Todos os seus posts, comentários e curtidas serão apagados permanentemente. Esta ação não pode ser desfeita.")){
-      onDeleteAccount();
-    }
+    // A confirmação foi removida pois `window.confirm` é bloqueado no sandbox.
+    onDeleteAccount();
   }
 
   return (
@@ -43,7 +43,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ user, allPosts, onClo
         </button>
         
         <div className="p-6 flex flex-col items-center border-b border-gray-700">
-          <img src={user.avatar_url} alt={user.username} className="w-24 h-24 rounded-full mb-4 border-4 border-gray-700"/>
+          <img src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`} alt={user.username} className="w-24 h-24 rounded-full mb-4 border-4 border-gray-700 object-cover"/>
           <h2 className="text-2xl font-bold">{user.username}</h2>
           <p className="text-gray-400">{userPosts.length} Rolês Criados</p>
           <div className="flex items-center gap-4 mt-4">

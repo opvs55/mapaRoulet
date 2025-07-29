@@ -1,8 +1,9 @@
 
+
 import React, { useState, useRef } from 'react';
 import { Post, Coordinates, UserProfile } from '../../types/index.ts';
 import { generateDescriptionFromImage } from '../../services/geminiService.ts';
-import { createPost } from '../../services/supabaseService.ts';
+import { createPost } from '../../services/posts.ts';
 import { CloseIcon, CameraIcon, SendIcon, SparklesIcon, FlameIcon, FoodIcon, MusicIcon, ArtIcon, PartyPopperIcon } from '../ui/Icons.tsx';
 import Spinner from '../ui/Spinner.tsx';
 
@@ -72,6 +73,7 @@ const EventCreationModal: React.FC<EventCreationModalProps> = ({ isOpen, onClose
     }
     setSubmitting(true);
     try {
+      // The parent component now handles the logic via the usePosts hook
       const newPost = await createPost({
         userLocation,
         description,
