@@ -211,7 +211,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="w-screen h-screen bg-gray-900 text-white flex flex-col">
+    <div className="w-screen h-full bg-gray-900 text-white flex flex-col">
       <header className="shrink-0 bg-black bg-opacity-75 p-3 sm:p-4 flex items-center justify-between z-20 shadow-lg gap-2 sm:gap-4">
         <div className="flex items-center gap-2 shrink-0">
           <LogoIcon className="w-8 h-8 text-blue-400" />
