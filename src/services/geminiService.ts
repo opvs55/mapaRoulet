@@ -3,15 +3,16 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Coordinates } from '../types/index.ts';
 
-// In a Vite app, the correct way to access environment variables is `import.meta.env`.
-// The variable must be prefixed with `VITE_` to be exposed to the client.
-// However, per strict project guidelines, we must use process.env.API_KEY.
-// The build environment should handle this substitution.
-if (!process.env.API_KEY) {
-    throw new Error("A chave da API do Gemini (API_KEY) não foi encontrada. Verifique suas variáveis de ambiente.");
+// Em um aplicativo Vite, a maneira correta e segura de acessar as variáveis de ambiente do lado do cliente é `import.meta.env`.
+// A variável deve ser prefixada com `VITE_` para ser exposta.
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+    // Mensagem de erro atualizada para refletir o nome correto da variável.
+    throw new Error("A chave da API do Gemini (VITE_GEMINI_API_KEY) não foi encontrada. Verifique suas variáveis de ambiente.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey });
 
 /**
  * Generates a creative description for an image using Gemini.

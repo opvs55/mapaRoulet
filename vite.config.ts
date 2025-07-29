@@ -1,17 +1,12 @@
 
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { cwd } from 'process'
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, cwd(), '');
-  return {
-    plugins: [react()],
-    // Disponibiliza as variáveis de ambiente para o código do lado do cliente de forma segura.
-    // O Vite substituirá 'process.env.API_KEY' pelo valor da variável de ambiente no momento da compilação.
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
-    }
-  }
+export default defineConfig({
+  plugins: [react()],
+  // A configuração 'define' foi removida.
+  // O Vite expõe automaticamente as variáveis de ambiente prefixadas com 'VITE_'
+  // para 'import.meta.env', que agora é usado em todo o aplicativo.
+  // Isso simplifica a configuração e evita confusão.
 })
