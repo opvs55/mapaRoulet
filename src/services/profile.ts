@@ -19,7 +19,7 @@ const getPathFromUrl = (url: string, bucketName: string): string | null => {
         }
         return null;
     } catch (e) {
-        console.error("URL inválida, não foi possível extrair o caminho:", url);
+        console.warn("URL inválida ou não pertence ao Supabase Storage, não foi possível extrair o caminho:", url);
         return null;
     }
 };
@@ -43,15 +43,15 @@ export const updateUserProfile = async (userId: string, username: string, avatar
         throw new Error("Usuário não autenticado.");
     }
 
-    let avatar_url: string | undefined = currentUser.user_metadata.avatar_url;
-    
-    // 1. If a new avatar file is provided, upload it and prepare the new URL.
-    if (avatarFile) {
-        const oldAvatarPath = avatar_url ? getPathFromUrl(avatar_url, 'avatars') : null;
+    let newAvatarUrl: string | null = (currentUser.user_metadata.avatar_url as string | null) ?? null;
+    const oldAvatarPath = currentUser.user_metadata.avatar_url ? getPathFromUrl(currentUser.user_metadata.avatar_url, 'avatars') : null;
 
+    // 1. If a new avatar file is provided, upload it and get the new URL.
+    if (avatarFile) {
         const fileExt = avatarFile.name.split('.').pop();
         const newFileName = `${Date.now()}.${fileExt}`;
-        const newFilePath = `${userId}/${newFileName}`; // Path inside bucket: userId/filename.ext
+        // Path inside bucket: userId/filename.ext ensures organization and prevents conflicts.
+        const newFilePath = `${userId}/${newFileName}`;
         
         const { error: uploadError } = await supabase.storage
             .from('avatars')
@@ -59,33 +59,26 @@ export const updateUserProfile = async (userId: string, username: string, avatar
         
         if (uploadError) {
             handleStorageError(uploadError);
+            // Re-throw to stop execution
+            throw new Error("Falha no upload do novo avatar.");
         }
 
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(newFilePath);
         if (!urlData.publicUrl) {
-            throw new Error('Não foi possível obter a URL do novo avatar.');
+            throw new Error('Não foi possível obter a URL pública do novo avatar.');
         }
-        // Update avatar_url to the new one for the next steps
-        avatar_url = `${urlData.publicUrl}?t=${new Date().getTime()}`;
-        
-        // After new avatar is successfully uploaded and URL is retrieved, delete the old one.
-        if (oldAvatarPath) {
-            const { error: removeError } = await supabase.storage
-                .from('avatars')
-                .remove([oldAvatarPath]);
-            if (removeError) {
-                // Log the error but don't fail the whole operation.
-                console.error("Falha ao deletar avatar antigo:", removeError);
-            }
-        }
+        // Add a timestamp to bust caches
+        newAvatarUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
     }
 
-    // 2. Update user metadata in Supabase Auth.
+    // 2. Update user metadata in Supabase Auth and the public 'profiles' table.
+    const userUpdates = {
+        username: username,
+        avatar_url: newAvatarUrl,
+    };
+    
     const { data: { user: updatedUser }, error: userUpdateError } = await supabase.auth.updateUser({
-        data: { 
-            username: username,
-            avatar_url: avatar_url,
-        }
+        data: userUpdates
     });
     
     if (userUpdateError || !updatedUser) {
@@ -93,10 +86,9 @@ export const updateUserProfile = async (userId: string, username: string, avatar
         throw new Error('Não foi possível atualizar os dados de autenticação do usuário.');
     }
 
-    // 3. Update the public 'profiles' table for consistency.
     const profileUpdates: Database['public']['Tables']['profiles']['Update'] = {
-        username: updatedUser.user_metadata.username,
-        avatar_url: updatedUser.user_metadata.avatar_url,
+        username: username,
+        avatar_url: newAvatarUrl,
         updated_at: new Date().toISOString(),
     };
 
@@ -107,9 +99,22 @@ export const updateUserProfile = async (userId: string, username: string, avatar
 
     if (profileUpdateError) {
         console.error('Erro ao atualizar a tabela de perfis públicos:', profileUpdateError);
+        throw new Error("Não foi possível atualizar o perfil público.");
+    }
+    
+    // 3. AFTER all DB updates are successful, delete the old avatar if a new one was uploaded.
+    if (avatarFile && oldAvatarPath) {
+        const { error: removeError } = await supabase.storage
+            .from('avatars')
+            .remove([oldAvatarPath]);
+        if (removeError) {
+            // Log this error, but don't fail the entire operation since the user's profile is already updated.
+            // This is a cleanup failure, not a primary function failure.
+            console.warn("Falha ao deletar o avatar antigo, mas o perfil foi atualizado:", removeError);
+        }
     }
 
-    // 4. Return the freshly updated profile data.
+    // 4. Return the freshly updated profile data from the most reliable source (updatedUser).
     return {
         id: updatedUser.id,
         username: updatedUser.user_metadata.username as string,

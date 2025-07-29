@@ -22,20 +22,20 @@ html, body, #root {
   background-color: #1a202c; /* gray-900 */
 }
 .event-marker-icon {
-  --shadow-color1: #fb923c; /* default fallback color */
+  --shadow-color1: #fb923c99; /* default fallback color with alpha */
   --shadow-color2: #f59e0b; /* default fallback color */
-  animation: flicker 2s infinite alternate;
+  animation: pulse-glow 2.5s infinite ease-in-out;
 }
-@keyframes flicker {
-  0%, 18%, 22%, 25%, 53%, 57%, 100% {
-    filter: drop-shadow(0 0 4px var(--shadow-color1)) drop-shadow(0 0 10px var(--shadow-color2));
-    opacity: 1;
+
+@keyframes pulse-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px var(--shadow-color1));
   }
-  20%, 24%, 55% {
-    filter: none;
-    opacity: 0.9;
+  50% {
+    filter: drop-shadow(0 0 10px var(--shadow-color2));
   }
 }
+
 .animate-fade-in-up {
   animation: fadeInUp 0.5s ease-out forwards;
 }

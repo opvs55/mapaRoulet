@@ -148,9 +148,7 @@ export interface Database {
         ]
       }
     }
-    Views: {
-      [_ in never]: never
-    }
+    Views: {}
     Functions: {
       delete_user_account: {
         Args: Record<string, unknown>
@@ -167,11 +165,7 @@ export interface Database {
         }[]
       }
     }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    Enums: {}
+    CompositeTypes: {}
   }
 }

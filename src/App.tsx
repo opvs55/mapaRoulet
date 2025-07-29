@@ -217,7 +217,7 @@ const App: React.FC = () => {
           <LogoIcon className="w-8 h-8 text-blue-400" />
           <h1 className="hidden sm:block text-xl font-bold tracking-wider text-left">Radar Urbano</h1>
         </div>
-        <div className="flex-grow flex justify-center px-1 sm:px-2">
+        <div className="flex-1 min-w-0 flex justify-center px-1 sm:px-2">
             <LocationSearch onSearch={handleLocationSearch} />
         </div>
         <div className="flex items-center gap-3 shrink-0">
